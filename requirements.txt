@@ -1,7 +1,8 @@
-fastapi==0.104.1
-uvicorn[standard]==0.24.0
-Pillow>=10.0.0
-transformers==4.35.2
-torch>=2.0.0
-python-multipart==0.0.6
-jinja2==3.1.2
+fastapi
+uvicorn
+jinja2
+pillow
+transformers
+torch --index-url https://download.pytorch.org/whl/cpu
+tokenizers==0.15.0
+python-multipart

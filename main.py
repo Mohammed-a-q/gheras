@@ -49,9 +49,11 @@ async def analyze(request: Request, file: UploadFile = File(...), city: str = Fo
 
     # Open image and run classifier
     try:
-        image = Image.open(file_path).convert("RGB")
-        # Resize image to 512x512 to reduce memory usage during analysis
-        image = image.resize((512, 512), Image.Resampling.LANCZOS)
+        image = Image.open(file_path)
+        # reduce image size to save memory during analysis (Render-friendly)
+        MAX_SIZE = (512, 512)
+        image.thumbnail(MAX_SIZE, Image.Resampling.LANCZOS)
+        image = image.convert("RGB")
     except Exception as e:
         return templates.TemplateResponse("result.html", {
             "request": request,
