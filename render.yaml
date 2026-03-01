@@ -1,0 +1,12 @@
+preStartCommand: "python download_model.py || echo 'Model download skipped'"
+services:
+  - type: web
+    name: gheras
+    env: python
+    plan: free
+    buildCommand: "pip install -r requirements.txt"
+    startCommand: "uvicorn main:app --host 0.0.0.0 --port $PORT --workers 1"
+    healthCheckPath: "/"
+    envVars:
+      - key: PYTHONUNBUFFERED
+        value: "1"

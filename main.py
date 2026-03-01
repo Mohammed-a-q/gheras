@@ -5,16 +5,26 @@ from fastapi.responses import RedirectResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 from PIL import Image
-from transformers import pipeline
 
 # Ensure upload directory exists
 BASE_DIR = os.path.dirname(__file__)
 UPLOAD_DIR = os.path.join(BASE_DIR, "static", "uploads")
 os.makedirs(UPLOAD_DIR, exist_ok=True)
 
-# Load model once at startup (will download on first run)
-# Uses a vision classification model from Hugging Face
-classifier = pipeline("image-classification", model="google/vit-base-patch16-224", device=-1)
+# Global classifier placeholder - loaded lazily on first use
+classifier = None
+
+def get_classifier():
+    """Load classifier lazily on first use to reduce memory footprint at startup"""
+    global classifier
+    if classifier is None:
+        from transformers import pipeline
+        classifier = pipeline(
+            "image-classification",
+            model="google/vit-base-patch16-224",
+            device=-1  # CPU only (device=-1 forces CPU)
+        )
+    return classifier
 
 app = FastAPI(title="غراس — مشروع مدرسي")
 app.mount("/static", StaticFiles(directory=os.path.join(BASE_DIR, "static")), name="static")
@@ -40,6 +50,8 @@ async def analyze(request: Request, file: UploadFile = File(...), city: str = Fo
     # Open image and run classifier
     try:
         image = Image.open(file_path).convert("RGB")
+        # Resize image to 512x512 to reduce memory usage during analysis
+        image = image.resize((512, 512), Image.Resampling.LANCZOS)
     except Exception as e:
         return templates.TemplateResponse("result.html", {
             "request": request,
@@ -53,7 +65,9 @@ async def analyze(request: Request, file: UploadFile = File(...), city: str = Fo
 
     # image color analysis removed (feature disabled)
 
-    results = classifier(image, top_k=5)
+    # Load and run classifier (lazy loading on first request)
+    classifier_fn = get_classifier()
+    results = classifier_fn(image, top_k=5)
     labels = [r.get("label", "").lower() for r in results]
     joined = " ".join(labels)
 

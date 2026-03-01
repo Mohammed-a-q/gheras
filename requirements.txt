@@ -1,8 +1,7 @@
-fastapi
-uvicorn
-pillow
-torch
-transformers
-python-multipart
-jinja2
-# numpy removed (color-analysis feature disabled)
+fastapi==0.104.1
+uvicorn[standard]==0.24.0
+Pillow>=10.0.0
+transformers==4.35.2
+torch>=2.0.0
+python-multipart==0.0.6
+jinja2==3.1.2
