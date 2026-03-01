@@ -137,10 +137,3 @@ async def analyze(request: Request, file: UploadFile = File(...), city: str = Fo
         "badge_class": badge_class,
         "city": city_display
     })
-
-git init
-git add .
-git commit -m "first commit"
-git branch -M main
-https://github.com/Mohammed-a-q/gheras.git
-git push -u origin main
