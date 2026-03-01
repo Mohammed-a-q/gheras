@@ -1,0 +1,67 @@
+<!doctype html>
+<html lang="ar">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>غراس - تحليل ملاءمة التشجير</title>
+  <link rel="icon" href="/static/favicon.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+  <header class="site-header">
+    <div class="container header-inner">
+      <div class="brand">
+        <h1>غراس</h1>
+        <p class="subtitle">تقييم مبدئي لملاءمة الموقع للتشجير</p>
+      </div>
+    </div>
+  </header>
+
+  <main class="container">
+    <section class="card upload-card">
+      <h2>ارفع صورة الموقع</h2>
+      <p class="lead">اختر صورة واضحة تُظهر المساحة المراد تقييمها (JPG/PNG).</p>
+
+      <form action="/analyze" method="post" enctype="multipart/form-data">
+        <label for="file" class="file-label">اختر صورة</label>
+        <input type="file" id="file" name="file" accept="image/*" required />
+
+        <label for="city" class="file-label">اختر المدينة</label>
+        <select id="city" name="city" required>
+          <option value="Riyadh">الرياض</option>
+          <option value="Jeddah">جدة</option>
+          <option value="Dammam">الدمام</option>
+          <option value="Abha">أبها</option>
+          <option value="Tabuk">تبوك</option>
+        </select>
+
+        <div class="actions">
+          <button type="submit" class="btn primary">🔍 تحليل الموقع</button>
+        </div>
+      </form>
+
+      <p class="note">تنويه: النتائج تقديرية وتعتمد على تحليل آلي، ولا تغني عن استشارة مختص زراعي.</p>
+    </section>
+    <footer class="footer-note">
+      <small>مُعد للعرض أمام لجنة مدرسية — نسخة MVP مبسطة.</small>
+    </footer>
+  </main>
+  <script>
+    const fileInput = document.getElementById('file');
+    fileInput.addEventListener('change', (e) => {
+      const file = e.target.files[0];
+      if (file) {
+        let img = document.getElementById('preview');
+        if (!img) {
+          img = document.createElement('img');
+          img.id = 'preview';
+          img.style.maxWidth = '100%';
+          img.style.marginTop = '12px';
+          fileInput.parentNode.insertBefore(img, fileInput.nextSibling);
+        }
+        img.src = URL.createObjectURL(file);
+      }
+    });
+  </script>
+</body>
+</html>

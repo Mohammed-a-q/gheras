@@ -1,0 +1,8 @@
+fastapi
+uvicorn
+pillow
+torch
+transformers
+python-multipart
+jinja2
+# numpy removed (color-analysis feature disabled)

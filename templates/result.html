@@ -1,0 +1,58 @@
+<!doctype html>
+<html lang="ar">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>النتيجة - غراس</title>
+  <link rel="icon" href="/static/favicon.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+  <header class="site-header small">
+    <div class="container header-inner">
+      <div class="brand">
+        <h1>غراس</h1>
+      </div>
+    </div>
+  </header>
+
+  <main class="container">
+    <section class="card result-card">
+      <h2>نتيجة التحليل</h2>
+
+      {% if image_url %}
+        <div class="image-wrap">
+          <img src="{{ image_url }}" alt="الصورة المرفوعة" />
+        </div>
+      {% endif %}
+
+      <div class="result-row">
+        <div class="badge decision-badge {{ badge_class }}">{{ decision }}</div>
+        <div class="result-info">
+          <div><strong>المدينة:</strong> {{ city }}</div>
+          <div><strong>السبب:</strong> {{ reason }}</div>
+          <div><strong>اقتراح أشجار:</strong>
+            {% if suggested_trees %}
+            <ul class="suggestions-list">
+              {% for t in suggested_trees %}
+                <li>{{ t }}</li>
+              {% endfor %}
+            </ul>
+            <p class="muted" style="font-size:0.85rem;margin-top:4px;">اقتُرحت الأشجار بناءً على المدينة والصورة المرفوعة.</p>
+            {% else %}
+            <p class="muted">لا توجد اقتراحات لأن الموقع غير مناسب.</p>
+            {% endif %}
+          </div>
+        </div>
+      </div>
+      
+
+      <div class="actions">
+        <a class="btn secondary" href="/">🔁 تحليل صورة أخرى</a>
+      </div>
+
+      <p class="note">تنبيه: النتائج تقديرية وتعتمد على تحليل آلي، ولا تغني عن استشارة مختص زراعي.</p>
+    </section>
+  </main>
+</body>
+</html>
