@@ -19,9 +19,11 @@ def get_classifier():
     global classifier
     if classifier is None:
         from transformers import pipeline
+        # use a smaller, CPU-friendly model to reduce memory footprint on Render
+        # 'microsoft/resnet-50' is significantly lighter than large ViT models
         classifier = pipeline(
             "image-classification",
-            model="google/vit-base-patch16-224",
+            model="microsoft/resnet-50",
             device=-1  # CPU only (device=-1 forces CPU)
         )
     return classifier
@@ -69,7 +71,19 @@ async def analyze(request: Request, file: UploadFile = File(...), city: str = Fo
 
     # Load and run classifier (lazy loading on first request)
     classifier_fn = get_classifier()
-    results = classifier_fn(image, top_k=5)
+    try:
+        # use fewer top predictions to reduce processing and memory
+        results = classifier_fn(image, top_k=3)
+    except Exception as e:
+        return templates.TemplateResponse("result.html", {
+            "request": request,
+            "image_url": image_url,
+            "decision": "خطأ في التحليل",
+            "reason": "حدث خطأ أثناء تحليل الصورة على الخادم. الرجاء المحاولة لاحقًا.",
+            "suggested_trees": [],
+            "badge_class": "danger",
+            "city": city
+        })
     labels = [r.get("label", "").lower() for r in results]
     joined = " ".join(labels)
 
