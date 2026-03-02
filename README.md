@@ -51,11 +51,34 @@ python download_model.py
 
 ### 4. تشغيل السيرفر
 
+يمكنك تشغيل السيرفر بالطريقة التقليدية:
 ```powershell
 uvicorn main:app --host 127.0.0.1 --port 8000 --reload
 ```
 
-### 5. افتح المتصفح
+أو لتبسيط الأمر، الاستعانة بالسكريبت المرفق `run_server.bat` الذي ينشّط البيئة ويقتل أي عملية على المنفذ ثم يطلق Uvicorn:
+```powershell
+# بعد الدخول إلى مجلد المشروع
+run_server.bat
+```
+
+### 5. اختبار رفع صورة
+
+في حال أردت اختبار الطلبات بدون واجهة، استخدم `Invoke-RestMethod` أو سكربت `test_upload.py`:
+```powershell
+Invoke-RestMethod -Uri 'http://127.0.0.1:8000/analyze' -Method Post -Form @{
+  file = Get-Item 'C:\path\to\image.jpg'
+  city = 'Riyadh'
+}
+```
+
+أو
+```powershell
+.
+venv\Scripts\python.exe test_upload.py C:\path\to\image.jpg Riyadh
+```
+
+### 6. افتح المتصفح
 
 http://127.0.0.1:8000
 

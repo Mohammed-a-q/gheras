@@ -1,6 +1,7 @@
 import os
 import uuid
 import logging
+import numpy as np
 from fastapi import FastAPI, File, UploadFile, Request, Form
 from fastapi.responses import RedirectResponse
 from fastapi.staticfiles import StaticFiles
@@ -26,7 +27,7 @@ def get_classifier():
         # use a smaller ViT variant to balance quality and memory
         classifier = pipeline(
             "image-classification",
-            model="google/vit-small-patch16-224",
+            model="google/vit-base-patch16-224",
             device=-1  # CPU only (device=-1 forces CPU)
         )
     return classifier
@@ -59,7 +60,30 @@ async def analyze(request: Request, file: UploadFile = File(...), city: str = Fo
         MAX_SIZE = (512, 512)
         image.thumbnail(MAX_SIZE, Image.Resampling.LANCZOS)
         image = image.convert("RGB")
+        # --- Color heuristic (fallback) ---
+        # compute simple green / gray (asphalt) percentages to help
+        # override model when it's uncertain or when surface is clearly asphalt/grass
+        try:
+            hsv = np.array(image.convert("HSV"))
+            h = hsv[:, :, 0].astype(int)
+            s = hsv[:, :, 1].astype(int)
+            v = hsv[:, :, 2].astype(int)
+            # green hue roughly between ~35..100 on 0-255 HSV scale
+            green_mask = (h >= 35) & (h <= 100) & (s >= 40) & (v >= 40)
+            green_pct = float(green_mask.mean())
+
+            arr = np.array(image)
+            r, g, b = arr[:, :, 0].astype(int), arr[:, :, 1].astype(int), arr[:, :, 2].astype(int)
+            rgb_diff = (np.abs(r - g) + np.abs(r - b) + np.abs(g - b))
+            # gray/asphalt: low color variance and relatively low brightness
+            gray_mask = (rgb_diff <= 30) & (v <= 120)
+            gray_pct = float(gray_mask.mean())
+        except Exception:
+            # if numpy or conversion fails, fall back to neutral values
+            green_pct = 0.0
+            gray_pct = 0.0
     except Exception as e:
+        logging.exception("Failed to open/process uploaded image")
         return templates.TemplateResponse("result.html", {
             "request": request,
             "image_url": None,
@@ -92,6 +116,21 @@ async def analyze(request: Request, file: UploadFile = File(...), city: str = Fo
         })
     labels = [r.get("label", "").lower() for r in results]
     joined = " ".join(labels)
+
+    # Color-based overrides: give priority to clear green/asphalt images
+    color_override = False
+    # if image is clearly dominated by gray/dark uniform pixels -> likely asphalt/road
+    if gray_pct > 0.12:
+        decision = "❌ غير مناسب"
+        reason = "تحتوي الصورة على مساحات صلبة (مثل أسفلت أو أرضيات خرسانية) مما يجعل الزراعة غير مناسبة."
+        suggested_trees = []
+        color_override = True
+    # if image shows a clear green cover -> prefer 'مناسب' regardless of weak model signals
+    elif green_pct > 0.08:
+        decision = "✅ مناسب للتشجير"
+        reason = "المنطقة خضراء ظاهريًا؛ البيئة مناسبة للتشجير." 
+        suggested_trees = ["نيم"]
+        color_override = True
 
     # simple keyword mapping (Arabic UI; logic based on English labels from model)
     suitable_kw = ["grass", "tree", "trees", "garden", "lawn", "park", "plant", "foliage"]
