@@ -20,16 +20,30 @@ os.makedirs(UPLOAD_DIR, exist_ok=True)
 classifier = None
 
 def get_classifier():
-    """Load classifier lazily on first use to reduce memory footprint at startup"""
+    """Load classifier lazily on first use.
+
+    The primary model is ViT-base. If loading that model fails (e.g. due to
+    out‑of‑memory on Render or similar), fall back to a much smaller ResNet
+    model so that inference can still proceed.  We only allocate the pipeline
+    once and cache it globally.
+    """
     global classifier
     if classifier is None:
         from transformers import pipeline
-        # use a smaller ViT variant to balance quality and memory
-        classifier = pipeline(
-            "image-classification",
-            model="google/vit-base-patch16-224",
-            device=-1  # CPU only (device=-1 forces CPU)
-        )
+        try:
+            classifier = pipeline(
+                "image-classification",
+                model="google/vit-base-patch16-224",
+                device=-1  # CPU only
+            )
+        except Exception:
+            logging.exception("Primary model load failed, falling back to ResNet-50")
+            # smaller model that usually fits in limited memory
+            classifier = pipeline(
+                "image-classification",
+                model="microsoft/resnet-50",
+                device=-1
+            )
     return classifier
 
 app = FastAPI(title="غراس — مشروع مدرسي")
@@ -101,8 +115,8 @@ async def analyze(request: Request, file: UploadFile = File(...), city: str = Fo
     # Load and run classifier (lazy loading on first request)
     classifier_fn = get_classifier()
     try:
-        # use original top_k for richer labels
-        results = classifier_fn(image, top_k=5)
+        # use smaller top_k to reduce memory & bandwidth; 3 still gives good clues
+        results = classifier_fn(image, top_k=3)
     except Exception as e:
         logging.exception("Model inference failed")
         return templates.TemplateResponse("result.html", {
