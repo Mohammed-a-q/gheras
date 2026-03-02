@@ -1,12 +1,14 @@
-preStartCommand: "python download_model.py || echo 'Model download skipped'"
+preStartCommand: "echo 'Model pre-cached during build'"
 services:
   - type: web
     name: gheras
     env: python
     plan: free
-    buildCommand: "pip install -r requirements.txt"
+    buildCommand: "pip install -r requirements.txt && python download_model.py || true"
     startCommand: "uvicorn main:app --host 0.0.0.0 --port $PORT --workers 1"
     healthCheckPath: "/"
     envVars:
       - key: PYTHONUNBUFFERED
         value: "1"
+      - key: HF_HOME
+        value: "/tmp/huggingface"
