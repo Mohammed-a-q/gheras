@@ -1,10 +1,14 @@
 import os
 import uuid
+import logging
 from fastapi import FastAPI, File, UploadFile, Request, Form
 from fastapi.responses import RedirectResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 from PIL import Image
+
+# basic logging
+logging.basicConfig(level=logging.INFO)
 
 # Ensure upload directory exists
 BASE_DIR = os.path.dirname(__file__)
@@ -68,12 +72,15 @@ async def analyze(request: Request, file: UploadFile = File(...), city: str = Fo
 
     # image color analysis removed (feature disabled)
 
+    image_url = f"/static/uploads/{filename}"
+
     # Load and run classifier (lazy loading on first request)
     classifier_fn = get_classifier()
     try:
         # use original top_k for richer labels
         results = classifier_fn(image, top_k=5)
     except Exception as e:
+        logging.exception("Model inference failed")
         return templates.TemplateResponse("result.html", {
             "request": request,
             "image_url": image_url,
