@@ -19,10 +19,10 @@ def get_classifier():
     global classifier
     if classifier is None:
         from transformers import pipeline
-        # restore the original ViT model (may use more memory)
+        # use a smaller ViT variant to balance quality and memory
         classifier = pipeline(
             "image-classification",
-            model="google/vit-base-patch16-224",
+            model="google/vit-small-patch16-224",
             device=-1  # CPU only (device=-1 forces CPU)
         )
     return classifier
