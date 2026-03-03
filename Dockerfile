@@ -11,8 +11,9 @@ RUN pip install --no-cache-dir torch --index-url https://download.pytorch.org/wh
 # Install other dependencies
 RUN pip install --no-cache-dir -r requirements.txt
 
-# Pre-download the ML model if possible (non-fatal if fails)
-RUN python download_model.py || echo "Model will be downloaded on first request"
+# NOTE: Model download removed from build step.
+# Models will be lazily loaded on first request (see get_classifier() in main.py)
+# This prevents startup hangs and allows quick healthcheck response.
 
 # Expose port
 EXPOSE 8000

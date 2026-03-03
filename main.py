@@ -51,6 +51,12 @@ app.mount("/static", StaticFiles(directory=os.path.join(BASE_DIR, "static")), na
 templates = Jinja2Templates(directory=os.path.join(BASE_DIR, "templates"))
 
 
+@app.get("/health")
+async def health():
+    """Simple health check endpoint (non-blocking, for Railway monitoring)"""
+    return {"status": "ok"}
+
+
 @app.get("/")
 async def index(request: Request):
     return templates.TemplateResponse("index.html", {"request": request})
