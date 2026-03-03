@@ -3,5 +3,5 @@ uvicorn
 jinja2
 pillow
 transformers
-torch --index-url https://download.pytorch.org/whl/cpu
+numpy
 python-multipart
