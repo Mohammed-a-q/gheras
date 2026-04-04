@@ -16,6 +16,10 @@ BASE_DIR = os.path.dirname(__file__)
 UPLOAD_DIR = os.path.join(BASE_DIR, "static", "uploads")
 os.makedirs(UPLOAD_DIR, exist_ok=True)
 
+logging.info(f"App starting, BASE_DIR: {BASE_DIR}")
+logging.info(f"Templates dir: {os.path.join(BASE_DIR, 'templates')}")
+logging.info(f"Static dir: {os.path.join(BASE_DIR, 'static')}")
+
 # Global classifier placeholder - loaded lazily on first use
 classifier = None
 
