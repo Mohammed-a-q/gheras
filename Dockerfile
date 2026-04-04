@@ -5,6 +5,9 @@ WORKDIR /app
 # Copy project files
 COPY . .
 
+# Make start script executable
+RUN chmod +x start.sh
+
 # Install PyTorch CPU-only first (separate to avoid timeout)
 RUN pip install --no-cache-dir torch --index-url https://download.pytorch.org/whl/cpu
 
@@ -19,6 +22,5 @@ RUN pip install --no-cache-dir -r requirements.txt
 ENV PORT=8000
 EXPOSE 8000
 
-# Start the application; use $PORT so Railway can override it
-# `sh -c` is required for environment variable expansion when using exec form.
-CMD sh -c "uvicorn main:app --host 0.0.0.0 --port $PORT --workers 1"
+# Start the application using the script (ensures $PORT expansion)
+CMD ["./start.sh"]
