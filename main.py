@@ -59,7 +59,11 @@ async def health():
 
 @app.get("/")
 async def index(request: Request):
-    return templates.TemplateResponse("index.html", {"request": request})
+    try:
+        return templates.TemplateResponse("index.html", {"request": request})
+    except Exception as e:
+        logging.error(f"Error serving index: {e}")
+        raise
 
 
 @app.post("/analyze")
