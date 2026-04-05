@@ -66,8 +66,8 @@ async def log_requests(request: Request, call_next):
     try:
         response = await call_next(request)
         return response
-    except Exception:
-        logging.exception("Unhandled exception while processing request")
+    except Exception as e:
+        logging.exception(f"Unhandled exception while processing request: {type(e).__name__}: {str(e)}")
         raise
 
 
@@ -80,9 +80,13 @@ async def health():
 @app.get("/")
 async def index(request: Request):
     try:
-        return templates.TemplateResponse(name="index.html", context={"request": request})
+        logging.info(f"Rendering index.html with request object")
+        response = templates.TemplateResponse("index.html", {"request": request})
+        logging.info(f"Successfully created TemplateResponse")
+        return response
     except Exception as e:
-        logging.error(f"Error serving index: {e}")
+        logging.error(f"Error serving index: {type(e).__name__}: {str(e)}", exc_info=True)
+        raise
         raise
 
 
@@ -128,7 +132,8 @@ async def analyze(request: Request, file: UploadFile = File(...), city: str = Fo
             gray_pct = 0.0
     except Exception as e:
         logging.exception("Failed to open/process uploaded image")
-        return templates.TemplateResponse(name="result.html", context={"request": request,
+        return templates.TemplateResponse("result.html", {
+            "request": request,
             "image_url": None,
             "decision": "خطأ في فتح الصورة",
             "reason": "الملف المرفوع ليس صورة صالحة.",
@@ -148,7 +153,7 @@ async def analyze(request: Request, file: UploadFile = File(...), city: str = Fo
         results = classifier_fn(image, top_k=3)
     except Exception as e:
         logging.exception("Model inference failed")
-        return templates.TemplateResponse(name="result.html", context={"request": request,
+        return templates.TemplateResponse("result.html", {"request": request,
             "image_url": image_url,
             "decision": "خطأ في التحليل",
             "reason": "حدث خطأ أثناء تحليل الصورة على الخادم. الرجاء المحاولة لاحقًا.",
@@ -245,7 +250,7 @@ async def analyze(request: Request, file: UploadFile = File(...), city: str = Fo
     elif decision.startswith("⚠️") or "مناسب بش" in decision:
         badge_class = "warning"
 
-    return templates.TemplateResponse(name="result.html", context={
+    return templates.TemplateResponse("result.html", {
         "request": request,
         "image_url": image_url,
         "decision": decision,
