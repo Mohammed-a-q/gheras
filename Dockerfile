@@ -2,8 +2,10 @@ FROM python:3.10-slim
 
 WORKDIR /app
 
-# Copy project files
+# Copy project files with explicit directories
 COPY . .
+COPY templates/ templates/
+COPY static/ static/
 
 # Make start script executable
 RUN chmod +x start.sh
