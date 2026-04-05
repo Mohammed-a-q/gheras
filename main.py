@@ -21,39 +21,38 @@ logging.info(f"App starting, BASE_DIR: {BASE_DIR}")
 logging.info(f"Templates dir: {os.path.join(BASE_DIR, 'templates')}")
 logging.info(f"Static dir: {os.path.join(BASE_DIR, 'static')}")
 
-# Global classifier placeholder - loaded lazily on first use
-classifier = None
+# Global model placeholder - loaded lazily on first use
+model = None
 
 def get_lanczos_filter():
     return getattr(getattr(Image, "Resampling", Image), "LANCZOS", Image.LANCZOS)
 
 
-def get_classifier():
-    """Load classifier lazily on first use.
+def load_model():
+    from transformers import pipeline
 
-    The primary model is ViT-base. If loading that model fails (e.g. due to
-    out‑of‑memory on Render or similar), fall back to a much smaller ResNet
-    model so that inference can still proceed.  We only allocate the pipeline
-    once and cache it globally.
-    """
-    global classifier
-    if classifier is None:
-        from transformers import pipeline
-        try:
-            classifier = pipeline(
-                "image-classification",
-                model="google/vit-base-patch16-224",
-                device=-1  # CPU only
-            )
-        except Exception:
-            logging.exception("Primary model load failed, falling back to ResNet-50")
-            # smaller model that usually fits in limited memory
-            classifier = pipeline(
-                "image-classification",
-                model="microsoft/resnet-50",
-                device=-1
-            )
-    return classifier
+    try:
+        return pipeline(
+            "image-classification",
+            model="google/vit-base-patch16-224",
+            device=-1  # CPU only
+        )
+    except Exception:
+        logging.exception("Primary model load failed, falling back to ResNet-50")
+        return pipeline(
+            "image-classification",
+            model="microsoft/resnet-50",
+            device=-1
+        )
+
+
+def get_model():
+    global model
+    if model is None:
+        logging.info("Loading model for the first time...")
+        model = load_model()
+        logging.info("Model loaded.")
+    return model
 
 app = FastAPI(title="غراس — مشروع مدرسي")
 app.mount("/static", StaticFiles(directory=os.path.join(BASE_DIR, "static")), name="static")
@@ -71,22 +70,20 @@ async def log_requests(request: Request, call_next):
         raise
 
 
-@app.get("/health")
-async def health():
-    """Simple health check endpoint (non-blocking, for Railway monitoring)"""
+@app.get("/")
+def health():
     return {"status": "ok"}
 
 
-@app.get("/")
-async def index(request: Request):
+@app.get("/app")
+async def app_index(request: Request):
     try:
-        # Read the static HTML file directly to avoid Jinja2 issues
         template_path = os.path.join(BASE_DIR, "templates", "index.html")
         with open(template_path, "r", encoding="utf-8") as f:
             html_content = f.read()
         return HTMLResponse(content=html_content, status_code=200)
     except Exception as e:
-        logging.error(f"Error serving index: {type(e).__name__}: {str(e)}", exc_info=True)
+        logging.error(f"Error serving app index: {type(e).__name__}: {str(e)}", exc_info=True)
         return HTMLResponse(content="<h1>خطأ في الخادم</h1>", status_code=500)
         raise
 
@@ -147,11 +144,11 @@ async def analyze(request: Request, file: UploadFile = File(...), city: str = Fo
 
     image_url = f"/static/uploads/{filename}"
 
-    # Load and run classifier (lazy loading on first request)
-    classifier_fn = get_classifier()
+    # Load and run model lazily on first prediction request
+    model_fn = get_model()
     try:
         # use smaller top_k to reduce memory & bandwidth; 3 still gives good clues
-        results = classifier_fn(image, top_k=3)
+        results = model_fn(image, top_k=3)
     except Exception as e:
         logging.exception("Model inference failed")
         return templates.TemplateResponse("result.html", {"request": request,
@@ -260,3 +257,10 @@ async def analyze(request: Request, file: UploadFile = File(...), city: str = Fo
         "badge_class": badge_class,
         "city": city_display
     })
+
+
+if __name__ == "__main__":
+    import os
+    import uvicorn
+
+    uvicorn.run(app, host="0.0.0.0", port=int(os.environ.get("PORT", 8080)))
