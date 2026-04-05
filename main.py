@@ -80,13 +80,14 @@ async def health():
 @app.get("/")
 async def index(request: Request):
     try:
-        logging.info(f"Rendering index.html with request object")
-        response = templates.TemplateResponse(template="index.html", context={"request": request})
-        logging.info(f"Successfully created TemplateResponse")
-        return response
+        # Read the static HTML file directly to avoid Jinja2 issues
+        template_path = os.path.join(BASE_DIR, "templates", "index.html")
+        with open(template_path, "r", encoding="utf-8") as f:
+            html_content = f.read()
+        return HTMLResponse(content=html_content, status_code=200)
     except Exception as e:
         logging.error(f"Error serving index: {type(e).__name__}: {str(e)}", exc_info=True)
-        raise
+        return HTMLResponse(content="<h1>خطأ في الخادم</h1>", status_code=500)
         raise
 
 
