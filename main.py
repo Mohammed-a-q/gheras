@@ -57,7 +57,7 @@ def get_classifier():
 
 app = FastAPI(title="غراس — مشروع مدرسي")
 app.mount("/static", StaticFiles(directory=os.path.join(BASE_DIR, "static")), name="static")
-templates = Jinja2Templates(directory=os.path.join(BASE_DIR, "templates"))
+templates = Jinja2Templates(directory=os.path.join(BASE_DIR, "templates"), cache_size=0)
 
 
 @app.middleware("http")
@@ -81,7 +81,7 @@ async def health():
 async def index(request: Request):
     try:
         logging.info(f"Rendering index.html with request object")
-        response = templates.TemplateResponse("index.html", {"request": request})
+        response = templates.TemplateResponse(template="index.html", context={"request": request})
         logging.info(f"Successfully created TemplateResponse")
         return response
     except Exception as e:
