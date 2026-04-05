@@ -7,7 +7,7 @@ from fastapi.responses import RedirectResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 from PIL import Image
-from starlette.responses import PlainTextResponse
+from starlette.responses import HTMLResponse
 
 # basic logging
 logging.basicConfig(level=logging.INFO)
