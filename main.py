@@ -7,6 +7,7 @@ from fastapi.responses import RedirectResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 from PIL import Image
+from starlette.responses import PlainTextResponse
 
 # basic logging
 logging.basicConfig(level=logging.INFO)
@@ -22,6 +23,10 @@ logging.info(f"Static dir: {os.path.join(BASE_DIR, 'static')}")
 
 # Global classifier placeholder - loaded lazily on first use
 classifier = None
+
+def get_lanczos_filter():
+    return getattr(getattr(Image, "Resampling", Image), "LANCZOS", Image.LANCZOS)
+
 
 def get_classifier():
     """Load classifier lazily on first use.
@@ -55,6 +60,17 @@ app.mount("/static", StaticFiles(directory=os.path.join(BASE_DIR, "static")), na
 templates = Jinja2Templates(directory=os.path.join(BASE_DIR, "templates"))
 
 
+@app.middleware("http")
+async def log_requests(request: Request, call_next):
+    logging.info(f"Request: {request.method} {request.url.path}")
+    try:
+        response = await call_next(request)
+        return response
+    except Exception:
+        logging.exception("Unhandled exception while processing request")
+        raise
+
+
 @app.get("/health")
 async def health():
     """Simple health check endpoint (non-blocking, for Railway monitoring)"""
@@ -64,7 +80,7 @@ async def health():
 @app.get("/")
 async def index(request: Request):
     try:
-        return templates.TemplateResponse("index.html", {"request": request})
+        return templates.TemplateResponse(name="index.html", context={"request": request})
     except Exception as e:
         logging.error(f"Error serving index: {e}")
         raise
@@ -86,7 +102,7 @@ async def analyze(request: Request, file: UploadFile = File(...), city: str = Fo
         image = Image.open(file_path)
         # reduce image size to save memory during analysis (Render-friendly)
         MAX_SIZE = (512, 512)
-        image.thumbnail(MAX_SIZE, Image.Resampling.LANCZOS)
+        image.thumbnail(MAX_SIZE, get_lanczos_filter())
         image = image.convert("RGB")
         # --- Color heuristic (fallback) ---
         # compute simple green / gray (asphalt) percentages to help
@@ -112,8 +128,7 @@ async def analyze(request: Request, file: UploadFile = File(...), city: str = Fo
             gray_pct = 0.0
     except Exception as e:
         logging.exception("Failed to open/process uploaded image")
-        return templates.TemplateResponse("result.html", {
-            "request": request,
+        return templates.TemplateResponse(name="result.html", context={"request": request,
             "image_url": None,
             "decision": "خطأ في فتح الصورة",
             "reason": "الملف المرفوع ليس صورة صالحة.",
@@ -133,8 +148,7 @@ async def analyze(request: Request, file: UploadFile = File(...), city: str = Fo
         results = classifier_fn(image, top_k=3)
     except Exception as e:
         logging.exception("Model inference failed")
-        return templates.TemplateResponse("result.html", {
-            "request": request,
+        return templates.TemplateResponse(name="result.html", context={"request": request,
             "image_url": image_url,
             "decision": "خطأ في التحليل",
             "reason": "حدث خطأ أثناء تحليل الصورة على الخادم. الرجاء المحاولة لاحقًا.",
@@ -231,7 +245,7 @@ async def analyze(request: Request, file: UploadFile = File(...), city: str = Fo
     elif decision.startswith("⚠️") or "مناسب بش" in decision:
         badge_class = "warning"
 
-    return templates.TemplateResponse("result.html", {
+    return templates.TemplateResponse(name="result.html", context={
         "request": request,
         "image_url": image_url,
         "decision": decision,
