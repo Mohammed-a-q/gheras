@@ -2,6 +2,11 @@ FROM python:3.10-slim
 
 WORKDIR /app
 
+# Environment variables for memory optimization
+ENV PYTHONDONTWRITEBYTECODE=1
+ENV PYTHONUNBUFFERED=1
+ENV PYTHONHASHSEED=random
+
 # Copy project files with explicit directories
 COPY . .
 COPY templates/ templates/

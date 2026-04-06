@@ -31,18 +31,24 @@ def load_model():
     from transformers import pipeline
 
     try:
-        return pipeline(
-            "image-classification",
-            model="google/vit-base-patch16-224",
-            device=-1  # CPU only
-        )
-    except Exception:
-        logging.exception("Primary model load failed, falling back to ResNet-50")
+        # Try smaller ResNet-50 first for better stability on limited resources
+        logging.info("Attempting to load ResNet-50 model...")
         return pipeline(
             "image-classification",
             model="microsoft/resnet-50",
-            device=-1
+            device=-1  # CPU only
         )
+    except Exception as e:
+        logging.warning(f"ResNet-50 load failed: {e}, falling back to ViT-base")
+        try:
+            return pipeline(
+                "image-classification",
+                model="google/vit-base-patch16-224",
+                device=-1
+            )
+        except Exception as e2:
+            logging.error(f"Both models failed to load: ResNet-50: {e}, ViT: {e2}")
+            raise RuntimeError("Unable to load any image classification model")
 
 
 def get_model():
@@ -50,7 +56,7 @@ def get_model():
     if model is None:
         logging.info("Loading model for the first time...")
         model = load_model()
-        logging.info("Model loaded.")
+        logging.info("Model loaded successfully.")
     return model
 
 
@@ -172,8 +178,8 @@ async def analyze(request: Request, file: UploadFile = File(...), city: str = Fo
     # Open image and run classifier
     try:
         image = Image.open(file_path)
-        # reduce image size to save memory during analysis (Render-friendly)
-        MAX_SIZE = (512, 512)
+        # Reduce image size to model input size for memory efficiency (224x224 for most models)
+        MAX_SIZE = (224, 224)
         image.thumbnail(MAX_SIZE, get_lanczos_filter())
         image = image.convert("RGB")
         # --- Color heuristic (fallback) ---
@@ -216,8 +222,14 @@ async def analyze(request: Request, file: UploadFile = File(...), city: str = Fo
     # Load and run model lazily on first prediction request
     model_fn = get_model()
     try:
+        logging.info("Starting model inference...")
         # use smaller top_k to reduce memory & bandwidth; 3 still gives good clues
         results = model_fn(image, top_k=3)
+        logging.info("Model inference completed successfully.")
+        # Clean up memory
+        import gc
+        gc.collect()
+        image.close()  # Close image to free memory
     except Exception as e:
         logging.exception("Model inference failed")
         return render_result_html(
