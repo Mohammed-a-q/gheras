@@ -343,7 +343,7 @@ async def analyze(request: Request, file: UploadFile = File(...), city: str = Fo
 
     image_section = f'<div class="image-wrap"><img src="{image_url}" alt="الصورة المرفوعة" /></div>' if image_url else ""
 
-    html = f"""<!doctype html>
+    html_template = """<!doctype html>
 <html lang="ar">
 <head>
   <meta charset="utf-8" />
@@ -388,6 +388,15 @@ async def analyze(request: Request, file: UploadFile = File(...), city: str = Fo
   </main>
 </body>
 </html>"""
+
+    html = html_template.format(
+        image_section=image_section,
+        badge_class=badge_class,
+        decision=decision,
+        city_display=city_display,
+        reason=reason,
+        suggestions_html=suggestions_html
+    )
 
     return HTMLResponse(content=html, status_code=200)
 
