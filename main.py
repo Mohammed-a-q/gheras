@@ -200,6 +200,8 @@ async def analyze(request: Request, file: UploadFile = File(...), city: str = Fo
             # gray/asphalt: low color variance and relatively low brightness
             gray_mask = (rgb_diff <= 30) & (v <= 120)
             gray_pct = float(gray_mask.mean())
+
+            logging.info(f"Color analysis: green_pct={green_pct:.3f}, gray_pct={gray_pct:.3f}")
         except Exception:
             # if numpy or conversion fails, fall back to neutral values
             green_pct = 0.0
@@ -243,6 +245,9 @@ async def analyze(request: Request, file: UploadFile = File(...), city: str = Fo
     labels = [r.get("label", "").lower() for r in results]
     joined = " ".join(labels)
 
+    logging.info(f"Model results: {results}")
+    logging.info(f"Labels: {labels}, joined: {joined}")
+
     # Color-based overrides: give priority to clear green/asphalt images
     color_override = False
     # if image is clearly dominated by gray/dark uniform pixels -> likely asphalt/road
@@ -251,20 +256,14 @@ async def analyze(request: Request, file: UploadFile = File(...), city: str = Fo
         reason = "تحتوي الصورة على مساحات صلبة (مثل أسفلت أو أرضيات خرسانية) مما يجعل الزراعة غير مناسبة."
         suggested_trees = []
         color_override = True
+        logging.info(f"Color override: gray dominant, decision={decision}")
     # if image shows a clear green cover -> prefer 'مناسب' regardless of weak model signals
-    elif green_pct > 0.08:
+    elif green_pct > 0.05:
         decision = "✅ مناسب للتشجير"
-        reason = "المنطقة خضراء ظاهريًا؛ البيئة مناسبة للتشجير." 
+        reason = "المنطقة خضراء ظاهريًا؛ البيئة مناسبة للتشجير."
         suggested_trees = ["نيم"]
         color_override = True
-
-    # simple keyword mapping (Arabic UI; logic based on English labels from model)
-    suitable_kw = ["grass", "tree", "trees", "garden", "lawn", "park", "plant", "foliage"]
-    conditional_kw = ["desert", "sand", "dune"]
-    unsuitable_kw = ["road", "asphalt", "building", "concrete", "pavement", "car", "vehicle"]
-
-    decision = "غير مُحدد"
-    reason = "لم يتم التعرف على معالم كافية في الصورة لاتخاذ قرار قاطع."
+        logging.info(f"Color override: green dominant, decision={decision}")
     suggested_trees = []
 
     # prioritize: unsuitable > suitable > conditional
