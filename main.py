@@ -3,10 +3,9 @@ import uuid
 import logging
 import numpy as np
 from fastapi import FastAPI, File, UploadFile, Request, Form
-from fastapi.responses import RedirectResponse
+from fastapi.responses import HTMLResponse
 from fastapi.staticfiles import StaticFiles
 from PIL import Image
-from starlette.responses import HTMLResponse
 
 # basic logging
 logging.basicConfig(level=logging.INFO)
@@ -39,33 +38,33 @@ def load_model():
     except Exception as e:
         logging.warning(f"Unable to limit PyTorch threads: {e}")
 
-    # Try a very lightweight model first, then fallback to a slightly larger but still CPU-friendly ResNet.
+    # First valid working model for CPU-only environments
     try:
-        logging.info("Attempting to load ViT-Tiny model for lightweight inference...")
+        logging.info("Attempting to load ResNet-18 model for inference...")
         return pipeline(
             "image-classification",
-            model="google/vit-tiny-patch16-224",
+            model="microsoft/resnet-18",
             device=-1,
         )
     except Exception as e:
-        logging.warning(f"ViT-Tiny load failed: {e}, falling back to ResNet-18")
+        logging.warning(f"ResNet-18 load failed: {e}, falling back to ViT-Base")
         try:
             return pipeline(
                 "image-classification",
-                model="microsoft/resnet-18",
+                model="google/vit-base-patch16-224",
                 device=-1,
             )
         except Exception as e2:
-            logging.warning(f"ResNet-18 load failed: {e2}, falling back to ViT-Base")
+            logging.warning(f"ViT-Base load failed: {e2}, falling back to ResNet-50")
             try:
                 return pipeline(
                     "image-classification",
-                    model="google/vit-base-patch16-224",
+                    model="microsoft/resnet-50",
                     device=-1,
                 )
             except Exception as e3:
                 logging.error(
-                    f"All model loads failed: ViT-Tiny: {e}, ResNet-18: {e2}, ViT-Base: {e3}"
+                    f"All model loads failed: ResNet-18: {e}, ViT-Base: {e2}, ResNet-50: {e3}"
                 )
                 raise RuntimeError("Unable to load any image classification model")
 
@@ -235,86 +234,92 @@ async def analyze(request: Request, file: UploadFile = File(...), city: str = Fo
             city_display=city,
         )
 
-    # image color analysis removed (feature disabled)
-
     image_url = f"/static/uploads/{filename}"
 
-    # Load and run model lazily on first prediction request
-    model_fn = get_model()
+    # Decide primarily by color analysis: green, asphalt/gray, sand.
+    decision = None
+    suggested_trees = []
+
+    # sand-like pixels: light brown/beige with moderate saturation and high brightness
     try:
-        logging.info("Starting model inference...")
-        # use smaller top_k to reduce memory & bandwidth; 3 still gives good clues
-        results = model_fn(image, top_k=3)
-        logging.info("Model inference completed successfully.")
-        # Clean up memory
-        import gc
-        gc.collect()
-        image.close()  # Close image to free memory
-    except Exception as e:
-        logging.exception("Model inference failed")
-        return render_result_html(
-            image_url=image_url,
-            decision="خطأ في التحليل",
-            reason="حدث خطأ أثناء تحليل الصورة على الخادم. الرجاء المحاولة لاحقًا.",
-            suggested_trees=[],
-            badge_class="danger",
-            city_display=city,
+        sand_mask = (
+            (h >= 5) & (h <= 35) &
+            (s >= 20) & (s <= 120) &
+            (v >= 120)
         )
-    labels = [r.get("label", "").lower() for r in results]
-    joined = " ".join(labels)
+        sand_pct = float(sand_mask.mean())
+    except Exception:
+        sand_pct = 0.0
 
-    logging.info(f"Model results: {results}")
-    logging.info(f"Labels: {labels}, joined: {joined}")
+    logging.info(f"Color analysis: green_pct={green_pct:.3f}, gray_pct={gray_pct:.3f}, sand_pct={sand_pct:.3f}")
 
-    # Color-based overrides: give priority to clear green/asphalt images
-    color_override = False
-    # if image is clearly dominated by gray/dark uniform pixels -> likely asphalt/road
-    if gray_pct > 0.12:
-        decision = "❌ غير مناسب"
-        reason = "تحتوي الصورة على مساحات صلبة (مثل أسفلت أو أرضيات خرسانية) مما يجعل الزراعة غير مناسبة."
-        suggested_trees = []
-        color_override = True
-        logging.info(f"Color override: gray dominant, decision={decision}")
-    # if image shows a clear green cover -> prefer 'مناسب' regardless of weak model signals
-    elif green_pct > 0.08:
+    if green_pct >= 0.08:
         decision = "✅ مناسب للتشجير"
-        reason = "المنطقة خضراء ظاهريًا؛ البيئة مناسبة للتشجير."
+        reason = "المنطقة خضراء ظاهريًا؛ البيئة تبدو مناسبة للتشجير."
         suggested_trees = ["نيم"]
-        color_override = True
-        logging.info(f"Color override: green dominant, decision={decision}")
-
-    # prioritize: unsuitable > suitable > conditional
-    if any(k in joined for k in unsuitable_kw):
+        badge_class = "success"
+    elif gray_pct >= 0.14:
         decision = "❌ غير مناسب"
-        reason = "تحتوي الصورة على معالم صلبة (أسفلت/طرق/مبانٍ) مما يجعل الزراعة غير مناسبة." 
-        # unsuitable sites get no tree suggestions
+        reason = "الصورة تحتوي على مساحات رمادية/داكنة متجانسة مثل أسفلت أو خرسانة، مما يجعل الزراعة غير مناسبة."
         suggested_trees = []
-    elif any(k in joined for k in suitable_kw):
-        decision = "✅ مناسب للتشجير"
-        reason = "تظهر عناصر نباتية مثل عشب/أشجار في الصورة؛ المكان يبدو مناسباً للتشجير." 
-        suggested_trees = ["نيم"]
-    elif any(k in joined for k in conditional_kw):
+        badge_class = "danger"
+    elif sand_pct >= 0.08:
         decision = "⚠️ مناسب بشروط"
-        reason = "المنطقة رملية/صحراوية؛ يوصى بأشجار مقاومة للجفاف وإجراءات تحضيرية للتربة." 
+        reason = "يظهر في الصورة سطح رملي أو غير مستقر؛ يفضل أشجار مقاومة للجفاف وإجراءات تحضيرية للتربة."
         suggested_trees = ["طلح"]
+        badge_class = "warning"
     else:
-        # fallback: not enough clear features identified
-        decision = "⚠️ مناسب بشروط"
-        reason = "لم تتضح معالم كافية في الصورة؛ ينصح بفحص ميداني وإدخال مزيد من الصور للحصول على تقييم أدق."
-        suggested_trees = ["نيم", "شجرة تتحمّل الجفاف"]
+        # If color cues are weak, use the model as a fallback for a better guess.
+        model_fn = get_model()
+        try:
+            logging.info("Starting fallback model inference...")
+            results = model_fn(image, top_k=1)
+            logging.info("Model inference completed successfully.")
+            image.close()
+            import gc
+            gc.collect()
+        except Exception as e:
+            logging.exception("Fallback model inference failed")
+            decision = "⚠️ مناسب بشروط"
+            reason = "المنطقة غير واضحة في الصورة؛ يوصى بفحص ميداني وتوفير صور إضافية."
+            suggested_trees = ["نيم", "شجرة تتحمّل الجفاف"]
+            badge_class = "warning"
+            # continue to city mapping
+            results = []
 
-    # (color-based adjustments removed)
+        if decision is None:
+            labels = [r.get("label", "").lower() for r in results]
+            joined = " ".join(labels)
+            logging.info(f"Model fallback labels: {labels}, joined: {joined}")
 
-    image_url = f"/static/uploads/{filename}"
+            if any(k in joined for k in ["tree", "forest", "grass", "lawn", "park"]):
+                decision = "✅ مناسب للتشجير"
+                reason = "التحليل الألي يشير إلى عناصر نباتية واضحة في الصورة."
+                suggested_trees = ["نيم"]
+                badge_class = "success"
+            elif any(k in joined for k in ["asphalt", "road", "pavement", "concrete", "building"]):
+                decision = "❌ غير مناسب"
+                reason = "التحليل الألي يشير إلى معالم صلبة مثل طرق أو مبانٍ."
+                suggested_trees = []
+                badge_class = "danger"
+            elif any(k in joined for k in ["sand", "desert", "dune", "soil", "dirt"]):
+                decision = "⚠️ مناسب بشروط"
+                reason = "التحليل الألي يشير إلى سطح رملي؛ يفضل اختيار أنواع تتحمل الجفاف."
+                suggested_trees = ["طلح"]
+                badge_class = "warning"
+            else:
+                decision = "⚠️ مناسب بشروط"
+                reason = "المنطقة غير واضحة بشكل كافٍ في الصورة، نوصي بالفحص الميداني أو مواصلة جمع صور أخرى."
+                suggested_trees = ["نيم", "شجرة تتحمّل الجفاف"]
+                badge_class = "warning"
+
+    # close the image after classification to free resources
+    try:
+        image.close()
+    except Exception:
+        pass
 
     # map city code to Arabic display name and list of suggestions
-    # suggestion criterion:
-    # 1. Base on classification/colour analysis decision above
-    # 2. For suitable/conditional locations, we pick a few tree names that
-    #    generally thrive in the selected city/climate.
-    # 3. The city_tree_map is a simple lookup: we recommend three local species
-    #    with preference for heat or drought tolerance.
-    # 4. No suggestions are returned when decision indicates "غير مناسب".
     city_display_map = {
         "Riyadh": "الرياض",
         "Jeddah": "جدة",
@@ -331,91 +336,27 @@ async def analyze(request: Request, file: UploadFile = File(...), city: str = Fo
         "Tabuk": ["طلح", "نيم", "شجرة مقاومة للجفاف"]
     }
 
-    # apply city-specific list only if location still considered suitable/conditional
     if "غير مناسب" not in decision:
         suggested_trees = city_tree_map.get(city, suggested_trees)
     else:
         suggested_trees = []
     city_display = city_display_map.get(city, city)
 
-    # decide badge class for UI (success / warning / danger)
-    badge_class = "success"
     if decision.startswith("❌") or "غير مناسب" in decision:
         badge_class = "danger"
     elif decision.startswith("⚠️") or "مناسب بش" in decision:
         badge_class = "warning"
-
-    # Build suggestions HTML
-    suggestions_html = ""
-    if suggested_trees:
-        items = "\n".join(f"<li>{t}</li>" for t in suggested_trees)
-        suggestions_html = f"""
-            <ul class="suggestions-list">
-              {items}
-            </ul>
-            <p class="muted" style="font-size:0.85rem;margin-top:4px;">اقتُرحت الأشجار بناءً على المدينة والصورة المرفوعة.</p>
-"""
     else:
-        suggestions_html = '<p class="muted">لا توجد اقتراحات لأن الموقع غير مناسب.</p>'
+        badge_class = "success"
 
-    image_section = f'<div class="image-wrap"><img src="{image_url}" alt="الصورة المرفوعة" /></div>' if image_url else ""
-
-    html_template = """<!doctype html>
-<html lang="ar">
-<head>
-  <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>النتيجة - غراس</title>
-  <link rel="icon" href="/static/favicon.svg" type="image/svg+xml">
-  <link rel="stylesheet" href="/static/style.css">
-</head>
-<body>
-  <header class="site-header small">
-    <div class="container header-inner">
-      <div class="brand">
-        <h1>غراس</h1>
-      </div>
-    </div>
-  </header>
-
-  <main class="container">
-    <section class="card result-card">
-      <h2>نتيجة التحليل</h2>
-
-      {image_section}
-
-      <div class="result-row">
-        <div class="badge decision-badge {badge_class}">{decision}</div>
-        <div class="result-info">
-          <div><strong>المدينة:</strong> {city_display}</div>
-          <div><strong>السبب:</strong> {reason}</div>
-          <div><strong>اقتراح أشجار:</strong>
-            {suggestions_html}
-          </div>
-        </div>
-      </div>
-      
-
-      <div class="actions">
-        <a class="btn secondary" href="/">🔁 تحليل صورة أخرى</a>
-      </div>
-
-      <p class="note">تنبيه: النتائج تقديرية وتعتمد على تحليل آلي، ولا تغني عن استشارة مختص زراعي.</p>
-    </section>
-  </main>
-</body>
-</html>"""
-
-    html = html_template.format(
-        image_section=image_section,
-        badge_class=badge_class,
+    return render_result_html(
+        image_url=image_url,
         decision=decision,
-        city_display=city_display,
         reason=reason,
-        suggestions_html=suggestions_html
+        suggested_trees=suggested_trees,
+        badge_class=badge_class,
+        city_display=city_display,
     )
-
-    return HTMLResponse(content=html, status_code=200)
 
 
 if __name__ == "__main__":
