@@ -209,6 +209,7 @@ async def analyze(request: Request, file: UploadFile = File(...), city: str = Fo
             # if numpy or conversion fails, fall back to neutral values
             green_pct = 0.0
             gray_pct = 0.0
+            green_dom_pct = 0.0
     except Exception as e:
         logging.exception("Failed to open/process uploaded image")
         return render_result_html(
