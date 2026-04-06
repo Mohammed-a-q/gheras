@@ -68,7 +68,7 @@ def render_result_html(image_url, decision, reason, suggested_trees, badge_class
 
     image_section = f'<div class="image-wrap"><img src="{image_url}" alt="الصورة المرفوعة" /></div>' if image_url else ""
 
-    html = f"""<!doctype html>
+    html_template = """<!doctype html>
 <html lang="ar">
 <head>
   <meta charset="utf-8" />
@@ -113,6 +113,15 @@ def render_result_html(image_url, decision, reason, suggested_trees, badge_class
   </main>
 </body>
 </html>"""
+
+    html = html_template.format(
+        image_section=image_section,
+        badge_class=badge_class,
+        decision=decision,
+        city_display=city_display,
+        reason=reason,
+        suggestions_html=suggestions_html
+    )
 
     return HTMLResponse(content=html, status_code=200)
 
