@@ -332,9 +332,10 @@ async def analyze(request: Request, file: UploadFile = File(...), city: str = Fo
     # Build suggestions HTML
     suggestions_html = ""
     if suggested_trees:
+        items = "\n".join(f"<li>{t}</li>" for t in suggested_trees)
         suggestions_html = f"""
             <ul class="suggestions-list">
-              {"\n".join(f"<li>{t}</li>" for t in suggested_trees)}
+              {items}
             </ul>
             <p class="muted" style="font-size:0.85rem;margin-top:4px;">اقتُرحت الأشجار بناءً على المدينة والصورة المرفوعة.</p>
 """
