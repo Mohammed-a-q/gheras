@@ -17,7 +17,7 @@ def main():
     if not image_path.exists():
         print(f"File not found: {image_path}")
         return
-    url = "http://127.0.0.1:8000/analyze"
+    url = "http://127.0.0.1:8080/analyze"
     with open(image_path, "rb") as f:
         files = {"file": (image_path.name, f, "image/jpeg")}
         data = {"city": city}
