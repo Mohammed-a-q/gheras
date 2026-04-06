@@ -31,23 +31,23 @@ def load_model():
     from transformers import pipeline
 
     try:
-        # Try smaller ResNet-18 first for better stability and lower memory usage
-        logging.info("Attempting to load ResNet-18 model...")
+        # Try ResNet-50 for better accuracy (with Hobby plan's 1GB RAM)
+        logging.info("Attempting to load ResNet-50 model...")
         return pipeline(
             "image-classification",
-            model="microsoft/resnet-18",
+            model="microsoft/resnet-50",
             device=-1  # CPU only
         )
     except Exception as e:
-        logging.warning(f"ResNet-18 load failed: {e}, falling back to ResNet-50")
+        logging.warning(f"ResNet-50 load failed: {e}, falling back to ResNet-18")
         try:
             return pipeline(
                 "image-classification",
-                model="microsoft/resnet-50",
+                model="microsoft/resnet-18",
                 device=-1
             )
         except Exception as e2:
-            logging.error(f"Both ResNet models failed: ResNet-18: {e}, ResNet-50: {e2}")
+            logging.error(f"Both ResNet models failed: ResNet-50: {e}, ResNet-18: {e2}")
             raise RuntimeError("Unable to load any image classification model")
 
 
@@ -258,7 +258,7 @@ async def analyze(request: Request, file: UploadFile = File(...), city: str = Fo
         color_override = True
         logging.info(f"Color override: gray dominant, decision={decision}")
     # if image shows a clear green cover -> prefer 'مناسب' regardless of weak model signals
-    elif green_pct > 0.05:
+    elif green_pct > 0.03:
         decision = "✅ مناسب للتشجير"
         reason = "المنطقة خضراء ظاهريًا؛ البيئة مناسبة للتشجير."
         suggested_trees = ["نيم"]
