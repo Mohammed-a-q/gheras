@@ -53,6 +53,70 @@ def get_model():
         logging.info("Model loaded.")
     return model
 
+
+def render_result_html(image_url, decision, reason, suggested_trees, badge_class, city_display):
+    suggestions_html = ""
+    if suggested_trees:
+        suggestions_html = """
+            <ul class="suggestions-list">
+              {items}
+            </ul>
+            <p class="muted" style="font-size:0.85rem;margin-top:4px;">اقتُرحت الأشجار بناءً على المدينة والصورة المرفوعة.</p>
+""".format(items="\n".join(f"<li>{t}</li>" for t in suggested_trees))
+    else:
+        suggestions_html = '<p class="muted">لا توجد اقتراحات لأن الموقع غير مناسب.</p>'
+
+    image_section = f'<div class="image-wrap"><img src="{image_url}" alt="الصورة المرفوعة" /></div>' if image_url else ""
+
+    html = f"""<!doctype html>
+<html lang="ar">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>النتيجة - غراس</title>
+  <link rel="icon" href="/static/favicon.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+  <header class="site-header small">
+    <div class="container header-inner">
+      <div class="brand">
+        <h1>غراس</h1>
+      </div>
+    </div>
+  </header>
+
+  <main class="container">
+    <section class="card result-card">
+      <h2>نتيجة التحليل</h2>
+
+      {image_section}
+
+      <div class="result-row">
+        <div class="badge decision-badge {badge_class}">{decision}</div>
+        <div class="result-info">
+          <div><strong>المدينة:</strong> {city_display}</div>
+          <div><strong>السبب:</strong> {reason}</div>
+          <div><strong>اقتراح أشجار:</strong>
+            {suggestions_html}
+          </div>
+        </div>
+      </div>
+      
+
+      <div class="actions">
+        <a class="btn secondary" href="/">🔁 تحليل صورة أخرى</a>
+      </div>
+
+      <p class="note">تنبيه: النتائج تقديرية وتعتمد على تحليل آلي، ولا تغني عن استشارة مختص زراعي.</p>
+    </section>
+  </main>
+</body>
+</html>"""
+
+    return HTMLResponse(content=html, status_code=200)
+
+
 app = FastAPI(title="غراس — مشروع مدرسي")
 app.mount("/static", StaticFiles(directory=os.path.join(BASE_DIR, "static")), name="static")
 
@@ -127,15 +191,14 @@ async def analyze(request: Request, file: UploadFile = File(...), city: str = Fo
             gray_pct = 0.0
     except Exception as e:
         logging.exception("Failed to open/process uploaded image")
-        return templates.TemplateResponse("result.html", {
-            "request": request,
-            "image_url": None,
-            "decision": "خطأ في فتح الصورة",
-            "reason": "الملف المرفوع ليس صورة صالحة.",
-            "suggested_trees": [],
-            "badge_class": "danger",
-            "city": city
-        })
+        return render_result_html(
+            image_url=None,
+            decision="خطأ في فتح الصورة",
+            reason="الملف المرفوع ليس صورة صالحة.",
+            suggested_trees=[],
+            badge_class="danger",
+            city_display=city,
+        )
 
     # image color analysis removed (feature disabled)
 
@@ -148,14 +211,14 @@ async def analyze(request: Request, file: UploadFile = File(...), city: str = Fo
         results = model_fn(image, top_k=3)
     except Exception as e:
         logging.exception("Model inference failed")
-        return templates.TemplateResponse("result.html", {"request": request,
-            "image_url": image_url,
-            "decision": "خطأ في التحليل",
-            "reason": "حدث خطأ أثناء تحليل الصورة على الخادم. الرجاء المحاولة لاحقًا.",
-            "suggested_trees": [],
-            "badge_class": "danger",
-            "city": city
-        })
+        return render_result_html(
+            image_url=image_url,
+            decision="خطأ في التحليل",
+            reason="حدث خطأ أثناء تحليل الصورة على الخادم. الرجاء المحاولة لاحقًا.",
+            suggested_trees=[],
+            badge_class="danger",
+            city_display=city,
+        )
     labels = [r.get("label", "").lower() for r in results]
     joined = " ".join(labels)
 
