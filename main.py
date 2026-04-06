@@ -31,14 +31,14 @@ def load_model():
     from transformers import pipeline
 
     try:
-        logging.info("Attempting to load ResNet-50 model...")
+        logging.info("Attempting to load ResNet-18 model...")
         return pipeline(
             "image-classification",
-            model="microsoft/resnet-50",
+            model="microsoft/resnet-18",
             device=-1  # CPU only
         )
     except Exception as e:
-        logging.warning(f"ResNet-50 load failed: {e}, falling back to ViT-base")
+        logging.warning(f"ResNet-18 load failed: {e}, falling back to ViT-base")
         try:
             return pipeline(
                 "image-classification",
@@ -46,7 +46,7 @@ def load_model():
                 device=-1
             )
         except Exception as e2:
-            logging.error(f"Both models failed to load: ResNet-50: {e}, ViT: {e2}")
+            logging.error(f"Both models failed to load: ResNet-18: {e}, ViT: {e2}")
             raise RuntimeError("Unable to load any image classification model")
 
 
