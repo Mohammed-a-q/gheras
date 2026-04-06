@@ -56,7 +56,7 @@ def get_model():
 
 app = FastAPI(title="غراس — مشروع مدرسي")
 app.mount("/static", StaticFiles(directory=os.path.join(BASE_DIR, "static")), name="static")
-templates = Jinja2Templates(directory=os.path.join(BASE_DIR, "templates"), cache_size=0)
+templates = Jinja2Templates(directory=os.path.join(BASE_DIR, "templates"))
 
 
 @app.middleware("http")
@@ -70,13 +70,13 @@ async def log_requests(request: Request, call_next):
         raise
 
 
-@app.get("/")
+@app.get("/health")
 def health():
     return {"status": "ok"}
 
 
-@app.get("/app")
-async def app_index(request: Request):
+@app.get("/")
+async def index(request: Request):
     try:
         template_path = os.path.join(BASE_DIR, "templates", "index.html")
         with open(template_path, "r", encoding="utf-8") as f:
@@ -85,7 +85,6 @@ async def app_index(request: Request):
     except Exception as e:
         logging.error(f"Error serving app index: {type(e).__name__}: {str(e)}", exc_info=True)
         return HTMLResponse(content="<h1>خطأ في الخادم</h1>", status_code=500)
-        raise
 
 
 @app.post("/analyze")
