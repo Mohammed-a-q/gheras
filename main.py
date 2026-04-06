@@ -201,7 +201,10 @@ async def analyze(request: Request, file: UploadFile = File(...), city: str = Fo
             gray_mask = (rgb_diff <= 30) & (v <= 120)
             gray_pct = float(gray_mask.mean())
 
-            logging.info(f"Color analysis: green_pct={green_pct:.3f}, gray_pct={gray_pct:.3f}")
+            # stronger green detection for full-green images
+            green_dom = (g > r * 1.05) & (g > b * 1.05) & (g >= 80)
+            green_dom_pct = float(green_dom.mean())
+            logging.info(f"Color analysis: green_pct={green_pct:.3f}, green_dom_pct={green_dom_pct:.3f}, gray_pct={gray_pct:.3f}")
         except Exception:
             # if numpy or conversion fails, fall back to neutral values
             green_pct = 0.0
@@ -258,13 +261,12 @@ async def analyze(request: Request, file: UploadFile = File(...), city: str = Fo
         color_override = True
         logging.info(f"Color override: gray dominant, decision={decision}")
     # if image shows a clear green cover -> prefer 'مناسب' regardless of weak model signals
-    elif green_pct > 0.03:
+    elif green_pct > 0.03 or green_dom_pct > 0.30:
         decision = "✅ مناسب للتشجير"
         reason = "المنطقة خضراء ظاهريًا؛ البيئة مناسبة للتشجير."
         suggested_trees = ["نيم"]
         color_override = True
         logging.info(f"Color override: green dominant, decision={decision}")
-    suggested_trees = []
 
     # prioritize: unsuitable > suitable > conditional
     if any(k in joined for k in unsuitable_kw):
