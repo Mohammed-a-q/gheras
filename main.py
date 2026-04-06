@@ -28,26 +28,46 @@ def get_lanczos_filter():
 
 
 def load_model():
+    import torch
     from transformers import pipeline
 
+    # Limit CPU thread usage to reduce pressure under concurrent requests
     try:
-        logging.info("Attempting to load ResNet-18 model...")
+        torch.set_num_threads(1)
+        torch.set_num_interop_threads(1)
+        logging.info("PyTorch thread count set to 1 for CPU stability.")
+    except Exception as e:
+        logging.warning(f"Unable to limit PyTorch threads: {e}")
+
+    # Try a very lightweight model first, then fallback to a slightly larger but still CPU-friendly ResNet.
+    try:
+        logging.info("Attempting to load ViT-Tiny model for lightweight inference...")
         return pipeline(
             "image-classification",
-            model="microsoft/resnet-18",
-            device=-1  # CPU only
+            model="google/vit-tiny-patch16-224",
+            device=-1,
         )
     except Exception as e:
-        logging.warning(f"ResNet-18 load failed: {e}, falling back to ViT-base")
+        logging.warning(f"ViT-Tiny load failed: {e}, falling back to ResNet-18")
         try:
             return pipeline(
                 "image-classification",
-                model="google/vit-base-patch16-224",
-                device=-1
+                model="microsoft/resnet-18",
+                device=-1,
             )
         except Exception as e2:
-            logging.error(f"Both models failed to load: ResNet-18: {e}, ViT: {e2}")
-            raise RuntimeError("Unable to load any image classification model")
+            logging.warning(f"ResNet-18 load failed: {e2}, falling back to ViT-Base")
+            try:
+                return pipeline(
+                    "image-classification",
+                    model="google/vit-base-patch16-224",
+                    device=-1,
+                )
+            except Exception as e3:
+                logging.error(
+                    f"All model loads failed: ViT-Tiny: {e}, ResNet-18: {e2}, ViT-Base: {e3}"
+                )
+                raise RuntimeError("Unable to load any image classification model")
 
 
 def get_model():
